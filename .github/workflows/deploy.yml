@@ -1,0 +1,65 @@
+name: Build and Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write # Allow writing to the repository (for git checkout)
+  id-token: write # Allow OIDC authentication with Google Cloud
+
+env:
+  PROJECT_ID: codeguardian-prod-c8e594
+  SERVICE_NAME: syntaxsecure-api
+  REGION: us-central1
+  # Corrected REPO_NAME to match the GitHub repository name
+  REPO_NAME: SyntaxSecure-Core
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Added to force CI/CD run detection by GitHub
+  WORKFLOW_UPDATE_TIMESTAMP: "20260514045033"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Google Auth
+      uses: 'google-github-actions/auth@v2'
+      with:
+        credentials_json: '${ secrets.GCP_SA_KEY }'
+
+    - name: Set up Cloud SDK
+      uses: 'google-github-actions/setup-gcloud@v2'
+
+    - name: Configure Project
+      run: gcloud config set project $PROJECT_ID
+
+    - name: Authorize Docker
+      run: gcloud auth configure-docker $us-central1-docker.pkg.dev
+
+    - name: Ensure Artifact Registry Repository
+      run: |
+        # Changed REPO_NAME to syntaxsecure-repo for Artifact Registry
+        if ! gcloud artifacts repositories describe syntaxsecure-repo --location=$REGION --project=$PROJECT_ID > /dev/null 2>&1; then
+          gcloud artifacts repositories create syntaxsecure-repo --repository-format=docker --location=$REGION --project=$PROJECT_ID --description="Docker repository for SyntaxSecure"
+        fi
+
+    - name: Build and Push Container
+      run: |
+        IMAGE_PATH="$us-central1-docker.pkg.dev/$codeguardian-prod-c8e594/syntaxsecure-repo/$syntaxsecure-api:${ github.sha }"
+        docker build -t $IMAGE_PATH .
+        docker push $IMAGE_PATH
+
+    - name: Deploy to Cloud Run
+      run: |
+        IMAGE_PATH="$us-central1-docker.pkg.dev/$codeguardian-prod-c8e594/syntaxsecure-repo/$syntaxsecure-api:${ github.sha }"
+        gcloud run deploy $SERVICE_NAME 
+          --image $IMAGE_PATH 
+          --region $REGION 
+          --platform managed 
+          --allow-unauthenticated 
+          --service-account=codeguardian-app-sa@codeguardian-prod-c8e594.iam.gserviceaccount.com
