@@ -17,7 +17,7 @@ env:
   REPO_NAME: SyntaxSecure-Core
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   # Added to force CI/CD run detection by GitHub
-  WORKFLOW_UPDATE_TIMESTAMP: "20260514045033"
+  WORKFLOW_UPDATE_TIMESTAMP: "20260514045325"
 
 jobs:
   deploy:
